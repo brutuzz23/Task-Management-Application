@@ -1,0 +1,43 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: worksync
+      POSTGRES_USER: ${DB_USER:-worksync}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-worksync}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-worksync} -d worksync"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # web UI: http://localhost:8025
+
+  app:
+    build: .
+    # In deployments, set APP_IMAGE (e.g. ghcr.io/<owner>/<repo>:latest) to run the CI-built image.
+    image: ${APP_IMAGE:-worksync-api:local}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/worksync
+      DB_USER: ${DB_USER:-worksync}
+      DB_PASSWORD: ${DB_PASSWORD:-worksync}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET (32+ chars) in .env}
+      MAIL_HOST: ${MAIL_HOST:-mailhog}
+      MAIL_PORT: ${MAIL_PORT:-1025}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+
+volumes:
+  pgdata:
